@@ -5,7 +5,7 @@ const HISTORY_GROUP_ID = '-1002267449607'
 const WINNER_GROUP_ID = '-1002456373939'
 
 export async function POST(request: Request) {
-  const { phone, prize, date, deviceInfo, username, fullName } = await request.json()
+  const { phone, prize, date, deviceInfo } = await request.json()
 
   const deviceInfoString = `
 Device Info:
@@ -22,22 +22,11 @@ Network Info:
 - Country: ${deviceInfo.country}
   `.trim()
 
-  const userInfo = `
-User Info:
-- Username: ${username}
-- Full Name: ${fullName || 'Not provided'}
-- Phone: ${phone || 'Not provided'}
-  `.trim()
-
-  const historyMessage = `Hey, I'm the JayTIN Team Management Center bot! User has successfully used https://jaytin.online/ to participate in a JayTIN lucky draw at ${date}.
-
-${userInfo}
+  const historyMessage = `Hey, I'm the JayTIN Team Management Center bot! User with phone number ${phone} has successfully used https://jaytin.online/ to participate in a JayTIN lucky draw at ${date}.
 
 ${deviceInfoString}`
 
-  const winnerMessage = `Hey, I'm the JayTIN Team Management Center bot! User has successfully used https://jaytin.online/ to participate in a lucky draw at ${date}. The user won: ${prize}! Good Luck!!!!
-
-${userInfo}
+  const winnerMessage = `Hey, I'm the JayTIN Team Management Center bot! User with phone number ${phone} has successfully used https://jaytin.online/ to participate in a lucky draw at ${date}. The user won: ${prize}! Good Luck!!!!
 
 ${deviceInfoString}`
 
