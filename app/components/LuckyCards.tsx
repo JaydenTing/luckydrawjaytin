@@ -250,7 +250,7 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
       
       <CardContent className="p-8 relative z-10">
         <div className="relative w-full h-full" style={{ transformStyle: "preserve-3d" }}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6"> {/* 调整网格布局以适应6张卡牌 */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 md:gap-6 mb-6"> {/* 调整网格布局以适应6张卡牌 */}
             <AnimatePresence>
               {prizes.map((prize, index) => (
                 <motion.div
