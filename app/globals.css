@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'YuanQiPaoPao';
+  src: url('/fonts/YuanQiPaoPao.ttf') format('truetype');
+  font-display: swap;
+}
+
+body {
+  font-family: 'YuanQiPaoPao', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.font-yuanqi {
+  font-family: 'YuanQiPaoPao', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.decorations > * {
+  pointer-events: none;
+}
+
+/* 添加一些基础样式 */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* 确保字体正确加载的回退样式 */
+.font-loading {
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', system-ui, -apple-system, sans-serif;
+}
+
+/* 添加一些中文字体优化 */
+.chinese-text {
+  font-family: 'YuanQiPaoPao', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* 按钮和交互元素的字体 */
+button, .btn {
+  font-family: 'YuanQiPaoPao', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', sans-serif;
+}
