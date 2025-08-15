@@ -1,17 +1,17 @@
-'use client'
+"use client"
 
-import { useState, useEffect, useRef } from 'react'
-import InfoModal from './components/InfoModal'
-import LuckyCards from './components/LuckyCards'
-import PrizeModal from './components/PrizeModal'
-import SnowAnimation from './components/SnowAnimation'
-import Background3D from './components/Background3D'
-import ParticleBackground from './components/ParticleBackground'
-import { motion } from 'framer-motion'
-import PrizeSummaryModal from './components/PrizeSummaryModal'
-import { getDeviceInfo } from './utils/deviceInfo'
-import FontLoader from './components/FontLoader'
-import Image from 'next/image' // 导入 Image 组件
+import { useState, useEffect, useRef } from "react"
+import InfoModal from "./components/InfoModal"
+import LuckyCards from "./components/LuckyCards"
+import PrizeModal from "./components/PrizeModal"
+import SnowAnimation from "./components/SnowAnimation"
+import Background3D from "./components/Background3D"
+import ParticleBackground from "./components/ParticleBackground"
+import { motion } from "framer-motion"
+import PrizeSummaryModal from "./components/PrizeSummaryModal"
+import { getDeviceInfo } from "./utils/deviceInfo"
+import FontLoader from "./components/FontLoader"
+import Image from "next/image"
 
 interface Prize {
   name: string
@@ -24,117 +24,141 @@ export default function Home() {
   const [showPrizeModal, setShowPrizeModal] = useState(false)
   const [showPrizeSummaryModal, setShowPrizeSummaryModal] = useState(false)
   const [userInfo, setUserInfo] = useState<{ phone: string } | null>(null)
-  const [prize, setPrize] = useState<Prize | null>(null) // 修改为 Prize 对象
+  const [prize, setPrize] = useState<Prize | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [multiDrawPrizes, setMultiDrawPrizes] = useState<string[]>([])
   const [deviceInfo, setDeviceInfo] = useState<any>(null)
-  const backgroundMusicRef = useRef<HTMLAudioElement | null>(null);
+  const [currentDrawType, setCurrentDrawType] = useState<"single" | "multi">("single")
+  const backgroundMusicRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     setIsLoading(false)
     getDeviceInfo().then(setDeviceInfo)
 
-    // 初始化背景音乐
-    backgroundMusicRef.current = new Audio('/sounds/background-music.mp3');
-    if (backgroundMusicRef.current) {
-      backgroundMusicRef.current.loop = true;
-      backgroundMusicRef.current.volume = 0.2; // 默认音量
-      // 尝试自动播放，如果失败则等待用户交互
-      backgroundMusicRef.current.play().catch(e => console.warn("Background music autoplay failed:", e));
+    const initBackgroundMusic = () => {
+      // 背景音乐将通过 LuckyCards 组件处理
     }
+
+    initBackgroundMusic()
 
     return () => {
       if (backgroundMusicRef.current) {
-        backgroundMusicRef.current.pause();
-        backgroundMusicRef.current.remove();
+        backgroundMusicRef.current.pause()
+        backgroundMusicRef.current.remove()
       }
-    };
+    }
   }, [])
 
   const handleInfoSubmit = async (info: { phone: string }) => {
-    setUserInfo(info);
-    setShowInfoModal(false);
+    setUserInfo(info)
+    setShowInfoModal(false)
 
-    // 尝试播放一个静音音频以解锁浏览器音频上下文
     try {
-      const audio = new Audio();
-      audio.volume = 0; // 静音
-      audio.src = '/sounds/draw-sound.mp3'; // 可以是任何短音频文件
-      await audio.play();
-      audio.pause(); // 立即暂停
-      audio.remove(); // 移除音频元素
-      
-      // 尝试播放背景音乐
+      const audio = new Audio()
+      audio.volume = 0
+      audio.src = "/sounds/draw-sound.mp3"
+      await audio.play()
+      audio.pause()
+      audio.remove()
+
       if (backgroundMusicRef.current && backgroundMusicRef.current.paused) {
-        backgroundMusicRef.current.play().catch(e => console.warn("Background music play after interaction failed:", e));
+        backgroundMusicRef.current
+          .play()
+          .catch((e) => console.warn("Background music play after interaction failed:", e))
       }
     } catch (e) {
-      console.warn("Failed to play muted audio to unlock context:", e);
+      console.warn("Failed to play muted audio to unlock context:", e)
     }
   }
 
-  const handlePrizeWon = async (wonPrize: Prize) => { // 修改为 Prize 对象
-    if (!userInfo || !deviceInfo) return;
+  const handlePrizeWon = async (wonPrize: Prize, drawType: "single" | "multi" = "single") => {
+    if (!userInfo || !deviceInfo) return
 
-    setPrize(wonPrize); // 存储整个 Prize 对象
-    setShowPrizeModal(true);
-
-    const date = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
-    try {
-      // Send Telegram message
-      const response = await fetch('/api/send-telegram-message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone: userInfo.phone,
-          prize: wonPrize.name, // 仅发送奖品名称到 Telegram
-          date,
-          deviceInfo // 包含设备和IP信息
-        }),
-      })
-      if (!response.ok) {
-        throw new Error('Failed to send Telegram message')
-      }
-    } catch (error) {
-      console.error('Error sending Telegram message:', error)
-      setError('发送消息时出错')
-    }
+    setPrize(wonPrize)
+    setCurrentDrawType(drawType)
+    setShowPrizeModal(true)
   }
 
   const handleMultiDraw = async (prizes: string[]) => {
-    setMultiDrawPrizes(prizes);
-    setShowPrizeSummaryModal(true);
+    setMultiDrawPrizes(prizes)
+    setShowPrizeSummaryModal(true)
+  }
 
-    if (userInfo && deviceInfo) {
-      const date = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
-      try {
-        // Send Telegram message for each prize
-        for (const prize of prizes) {
-          await fetch('/api/send-telegram-message', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              phone: userInfo.phone,
-              prize: prize,
-              date,
-              deviceInfo
-            }),
-          })
-        }
-      } catch (error) {
-        console.error('Error sending Telegram messages:', error)
-        setError('发送消息时出错')
+  const handleConfirm = async (screenshot?: string) => {
+    setShowPrizeModal(false)
+
+    if (!userInfo || !deviceInfo || !prize) return
+
+    const date = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })
+
+    try {
+      console.log("Sending telegram message with screenshot:", !!screenshot)
+
+      const response = await fetch("/api/send-telegram-message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: userInfo.phone,
+          prize: prize.name,
+          date,
+          deviceInfo,
+          screenshot,
+          drawType: currentDrawType,
+        }),
+      })
+
+      const result = await response.json()
+      console.log("Telegram API response:", result)
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to send Telegram message")
       }
+
+      console.log("Message sent successfully!")
+    } catch (error) {
+      console.error("Error sending Telegram message:", error)
+      setError("发送消息时出错: " + (error instanceof Error ? error.message : "未知错误"))
     }
   }
 
-  const handleConfirm = () => {
-    setShowPrizeModal(false)
+  const handleMultiDrawScreenshot = async (screenshot: string) => {
+    if (!userInfo || !deviceInfo) return
+
+    const date = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })
+
+    try {
+      console.log("Sending multi-draw telegram message with screenshot")
+
+      const response = await fetch("/api/send-telegram-message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: userInfo.phone,
+          prizes: multiDrawPrizes,
+          date,
+          deviceInfo,
+          screenshot,
+          drawType: "multi",
+        }),
+      })
+
+      const result = await response.json()
+      console.log("Multi-draw Telegram API response:", result)
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to send Telegram message")
+      }
+
+      console.log("Multi-draw message sent successfully!")
+    } catch (error) {
+      console.error("Error sending multi-draw Telegram message:", error)
+      setError("发送消息时出错: " + (error instanceof Error ? error.message : "未知错误"))
+    }
   }
 
   if (isLoading) {
@@ -142,7 +166,14 @@ export default function Home() {
   }
 
   if (error) {
-    return <div className="flex justify-center items-center h-screen text-red-500">{error}</div>
+    return (
+      <div className="flex flex-col justify-center items-center h-screen text-red-500 p-4">
+        <div className="text-center mb-4">{error}</div>
+        <button onClick={() => setError(null)} className="bg-[#999999] text-white px-4 py-2 rounded">
+          重试
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -151,8 +182,7 @@ export default function Home() {
         <Background3D />
         <ParticleBackground />
         <SnowAnimation />
-        
-        {/* JayTIN Logo */}
+
         <motion.div
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
@@ -171,29 +201,27 @@ export default function Home() {
           </div>
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.5 }}
           className="mt-8 w-full max-w-2xl"
         >
-          <LuckyCards 
-            canDraw={!!userInfo} 
-            onPrizeWon={handlePrizeWon} 
-            onMultiDraw={handleMultiDraw}
-          />
+          <LuckyCards canDraw={!!userInfo} onPrizeWon={handlePrizeWon} onMultiDraw={handleMultiDraw} />
         </motion.div>
         <InfoModal isOpen={showInfoModal} onSubmit={handleInfoSubmit} />
-        <PrizeModal 
-          isOpen={showPrizeModal} 
-          onClose={() => setShowPrizeModal(false)} 
+        <PrizeModal
+          isOpen={showPrizeModal}
+          onClose={() => setShowPrizeModal(false)}
           onConfirm={handleConfirm}
-          prize={prize} 
+          prize={prize}
+          drawType={currentDrawType}
         />
-        <PrizeSummaryModal 
+        <PrizeSummaryModal
           isOpen={showPrizeSummaryModal}
           onClose={() => setShowPrizeSummaryModal(false)}
           prizes={multiDrawPrizes}
+          onScreenshotCapture={handleMultiDrawScreenshot}
         />
       </main>
     </FontLoader>

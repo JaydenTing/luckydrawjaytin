@@ -3,17 +3,19 @@
 @tailwind utilities;
 
 @font-face {
-  font-family: 'YuanQiPaoPao';
-  src: url('/fonts/YuanQiPaoPao.ttf') format('truetype');
+  font-family: "YuanQiPaoPao";
+  src: url("/fonts/YuanQiPaoPao.ttf") format("truetype");
   font-display: swap;
 }
 
 body {
-  font-family: 'YuanQiPaoPao', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: "YuanQiPaoPao", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", "Helvetica Neue",
+    Helvetica, Arial, sans-serif;
 }
 
 .font-yuanqi {
-  font-family: 'YuanQiPaoPao', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: "YuanQiPaoPao", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", "Helvetica Neue",
+    Helvetica, Arial, sans-serif;
 }
 
 .decorations > * {
@@ -31,17 +33,56 @@ html {
 
 /* 确保字体正确加载的回退样式 */
 .font-loading {
-  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', system-ui, -apple-system, sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", system-ui, -apple-system, sans-serif;
 }
 
 /* 添加一些中文字体优化 */
 .chinese-text {
-  font-family: 'YuanQiPaoPao', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', sans-serif;
+  font-family: "YuanQiPaoPao", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", sans-serif;
   font-weight: 400;
   line-height: 1.6;
 }
 
 /* 按钮和交互元素的字体 */
-button, .btn {
-  font-family: 'YuanQiPaoPao', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', sans-serif;
+button,
+.btn {
+  font-family: "YuanQiPaoPao", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", sans-serif;
+}
+
+/* 音量滑块样式 */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e6f3ff;
+  outline: none;
+  border-radius: 5px;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #999999;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.3s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background: #777777;
+}
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #999999;
+  cursor: pointer;
+  border-radius: 50%;
+  border: none;
+  transition: background 0.3s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+  background: #777777;
 }
