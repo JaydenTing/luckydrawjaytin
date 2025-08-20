@@ -32,6 +32,7 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
   const [soundVolume, setSoundVolume] = useState(0.5) // 50%
   const [musicEnabled, setMusicEnabled] = useState(true)
   const [musicVolume, setMusicVolume] = useState(0.3) // 30%
+  const [singleDrawCount, setSingleDrawCount] = useState(0)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const backgroundMusicRef = useRef<HTMLAudioElement | null>(null)
@@ -308,10 +309,21 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
       await new Promise((resolve) => setTimeout(resolve, 2200))
     }
 
-    // 无论点击哪张卡牌，都显示和发送"荣耀奖品已封仓"
-    const fixedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
-    setRevealedPrize(fixedPrize.name)
-    onPrizeWon(fixedPrize, "single") // 标记为单次抽奖
+    let selectedPrize: Prize
+
+    // 点击卡牌也使用相同的逻辑
+    if (singleDrawCount < 3) {
+      // 前3次固定给"荣耀奖品已封仓"
+      selectedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
+      setSingleDrawCount(singleDrawCount + 1)
+    } else {
+      // 第4次按正常概率抽取
+      selectedPrize = selectPrize()
+      setSingleDrawCount(0) // 重置计数器
+    }
+
+    setRevealedPrize(selectedPrize.name)
+    onPrizeWon(selectedPrize, "single")
     playWinSound()
 
     if (!skipAnimation) {
@@ -346,28 +358,8 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     setIsDrawing(false)
   }
 
-  const resetCards = useCallback(() => {
-    return new Promise<void>((resolve) => {
-      setIsRefreshing(true)
-      setTimeout(
-        () => {
-          setSelectedCard(null)
-          setRevealedPrize(null)
-          generatePrizes()
-          shufflePrizes()
-          setIsRefreshing(false)
-          resolve()
-        },
-        skipAnimation ? 0 : 500,
-      )
-    })
-  }, [generatePrizes, shufflePrizes, skipAnimation])
-
   const handleSingleDraw = async () => {
     if (isDrawing) return
-
-    // 1连抽直接给"荣耀奖品已封仓"
-    const fixedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
 
     setIsDrawing(true)
     playDrawSound()
@@ -376,14 +368,26 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     const randomIndex = Math.floor(Math.random() * prizes.length)
     setSelectedCard(randomIndex)
 
+    let selectedPrize: Prize
+
+    // 1连抽逻辑：前3次给"荣耀奖品已封仓"，第4次按正常概率，然后重置计数
+    if (singleDrawCount < 3) {
+      // 前3次固定给"荣耀奖品已封仓"
+      selectedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
+      setSingleDrawCount(singleDrawCount + 1)
+    } else {
+      // 第4次按正常概率抽取
+      selectedPrize = selectPrize()
+      setSingleDrawCount(0) // 重置计数器
+    }
+
     if (!skipAnimation) {
       await new Promise((resolve) => setTimeout(resolve, 2200))
     }
 
-    // 显示"荣耀奖品已封仓"
-    setRevealedPrize(fixedPrize.name)
-    // 发送给后端的也是"荣耀奖品已封仓"
-    onPrizeWon(fixedPrize, "single") // 标记为单次抽奖
+    // 显示抽中的奖品
+    setRevealedPrize(selectedPrize.name)
+    onPrizeWon(selectedPrize, "single")
     playWinSound()
 
     if (!skipAnimation) {
@@ -423,20 +427,32 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     setIsDrawing(true)
     const drawnPrizes: string[] = []
 
-    // 5连抽：前3个必定是"荣耀奖品已封仓"，后2个按概率抽取
+    // 5连抽：2个必定是"荣耀奖品已封仓"，其余3个按概率抽取
+    // 先生成5个奖品，然后随机替换其中2个为"荣耀奖品已封仓"
+    const normalPrizes = Array(5)
+      .fill(null)
+      .map(() => selectPrize())
+
+    // 随机选择2个位置放置"荣耀奖品已封仓"
+    const fixedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
+    const fixedPositions = []
+    while (fixedPositions.length < 2) {
+      const randomPos = Math.floor(Math.random() * 5)
+      if (!fixedPositions.includes(randomPos)) {
+        fixedPositions.push(randomPos)
+      }
+    }
+
+    // 替换指定位置的奖品
+    fixedPositions.forEach((pos) => {
+      normalPrizes[pos] = fixedPrize
+    })
+
     for (let i = 0; i < 5; i++) {
       playDrawSound()
       const randomIndex = Math.floor(Math.random() * prizes.length)
 
-      let prize: Prize
-      if (i < 3) {
-        // 前3个必定是"荣耀奖品已封仓"
-        prize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
-      } else {
-        // 后2个按正常概率抽取
-        prize = prizes[randomIndex]
-      }
-
+      const prize = normalPrizes[i]
       drawnPrizes.push(prize.name)
 
       setSelectedCard(randomIndex)
@@ -464,6 +480,23 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     onMultiDraw(drawnPrizes)
     playWinSound()
   }
+
+  const resetCards = useCallback(() => {
+    return new Promise<void>((resolve) => {
+      setIsRefreshing(true)
+      setTimeout(
+        () => {
+          setSelectedCard(null)
+          setRevealedPrize(null)
+          generatePrizes()
+          shufflePrizes()
+          setIsRefreshing(false)
+          resolve()
+        },
+        skipAnimation ? 0 : 500,
+      )
+    })
+  }, [generatePrizes, shufflePrizes, skipAnimation])
 
   const refreshVariants = {
     hidden: { opacity: 0, scale: 0.8 },
