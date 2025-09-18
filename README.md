@@ -22,6 +22,18 @@ Continue building your app on:
 
 **[https://v0.dev/chat/projects/E6OQAzrCSTR](https://v0.dev/chat/projects/E6OQAzrCSTR)**
 
+## Authentication
+
+The application now includes a simple login system that protects the lucky draw experience. Administrators can configure the login
+credentials with the `LOGIN_USERNAME` and `LOGIN_PASSWORD` environment variables. When those values are not provided, the default
+credentials are:
+
+- Username: `admin`
+- Password: `password123`
+
+After a successful login a lightweight session token is stored locally and the user will be redirected to the main draw page. Log
+out from the top-right corner of the home screen to return to the login page.
+
 ## How It Works
 
 1. Create and modify your project using [v0.dev](https://v0.dev)
