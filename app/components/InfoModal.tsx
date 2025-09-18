@@ -15,6 +15,12 @@ export default function InfoModal({ isOpen, onSubmit }: InfoModalProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     onSubmit({ phone: `+60${phone}` })
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("userPhone", `+60${phone}`)
+    }
+
+    setPhone("")
   }
 
   return (

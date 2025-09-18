@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import InfoModal from "./components/InfoModal"
 import LuckyCards from "./components/LuckyCards"
 import PrizeModal from "./components/PrizeModal"
@@ -12,6 +13,7 @@ import PrizeSummaryModal from "./components/PrizeSummaryModal"
 import { getDeviceInfo } from "./utils/deviceInfo"
 import FontLoader from "./components/FontLoader"
 import Image from "next/image"
+import { Button } from "@/components/ui/button"
 
 interface Prize {
   name: string
@@ -20,7 +22,8 @@ interface Prize {
 }
 
 export default function Home() {
-  const [showInfoModal, setShowInfoModal] = useState(true)
+  const router = useRouter()
+  const [showInfoModal, setShowInfoModal] = useState(false)
   const [showPrizeModal, setShowPrizeModal] = useState(false)
   const [showPrizeSummaryModal, setShowPrizeSummaryModal] = useState(false)
   const [userInfo, setUserInfo] = useState<{ phone: string } | null>(null)
@@ -33,6 +36,26 @@ export default function Home() {
   const backgroundMusicRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const token = window.localStorage.getItem("authToken")
+
+    if (!token) {
+      router.replace("/login")
+      return
+    }
+
+    const storedPhone = window.localStorage.getItem("userPhone")
+
+    if (storedPhone) {
+      setUserInfo({ phone: storedPhone })
+      setShowInfoModal(false)
+    } else {
+      setShowInfoModal(true)
+    }
+
     setIsLoading(false)
     getDeviceInfo().then(setDeviceInfo)
 
@@ -48,11 +71,15 @@ export default function Home() {
         backgroundMusicRef.current.remove()
       }
     }
-  }, [])
+  }, [router])
 
   const handleInfoSubmit = async (info: { phone: string }) => {
     setUserInfo(info)
     setShowInfoModal(false)
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("userPhone", info.phone)
+    }
 
     try {
       const audio = new Audio()
@@ -161,6 +188,17 @@ export default function Home() {
     }
   }
 
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("authToken")
+      window.localStorage.removeItem("userPhone")
+    }
+
+    setUserInfo(null)
+    setShowInfoModal(false)
+    router.replace("/login")
+  }
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-screen text-[#999999]">加载中...</div>
   }
@@ -178,7 +216,19 @@ export default function Home() {
 
   return (
     <FontLoader>
-      <main className="flex min-h-screen flex-col items-center justify-center p-4 md:p-24 bg-gradient-to-br from-white to-[#E6F3FF] overflow-hidden">
+      <main className="relative flex min-h-screen flex-col items-center justify-center p-4 md:p-24 bg-gradient-to-br from-white to-[#E6F3FF] overflow-hidden">
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-3 rounded-full bg-white/80 px-4 py-2 shadow-lg backdrop-blur">
+          {userInfo?.phone && (
+            <span className="text-sm font-medium text-[#666666] chinese-text">已登录：{userInfo.phone}</span>
+          )}
+          <Button
+            variant="secondary"
+            className="bg-[#999999] text-white hover:bg-[#888888] chinese-text"
+            onClick={handleLogout}
+          >
+            退出登录
+          </Button>
+        </div>
         <Background3D />
         <ParticleBackground />
         <SnowAnimation />
