@@ -6,22 +6,24 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import confetti from "canvas-confetti"
-import { Sparkles, Zap, Star } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import Image from "next/image"
 
 interface Prize {
   id: string
   name: string
   probability: number
+  cost?: number
 }
 
 interface LuckyCardsProps {
   canDraw: boolean
   onPrizeWon: (prize: Prize, drawType?: "single" | "multi") => void
-  onMultiDraw: (prizes: string[]) => void
+  onMultiDraw: (prizes: string[], totalCost: number) => void
+  userBalance: number
 }
 
-export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCardsProps) {
+export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw, userBalance }: LuckyCardsProps) {
   const [isDrawing, setIsDrawing] = useState(false)
   const [selectedCard, setSelectedCard] = useState<number | null>(null)
   const [revealedPrize, setRevealedPrize] = useState<string | null>(null)
@@ -33,6 +35,12 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
   const [musicEnabled, setMusicEnabled] = useState(true)
   const [musicVolume, setMusicVolume] = useState(0.3) // 30%
   const [singleDrawCount, setSingleDrawCount] = useState(0)
+  const [dbPrizes, setDbPrizes] = useState<Prize[]>([])
+
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<"single" | "multi" | "card" | null>(null)
+  const [confirmCost, setConfirmCost] = useState(0)
+  const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const backgroundMusicRef = useRef<HTMLAudioElement | null>(null)
@@ -112,13 +120,33 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     }
   }, [musicVolume])
 
+  useEffect(() => {
+    const fetchPrizes = async () => {
+      try {
+        const response = await fetch("/api/prizes")
+        const data = await response.json()
+        if (data && data.length > 0) {
+          const formattedPrizes = data.map((p: any) => ({
+            id: p.id.toString(),
+            name: p.name,
+            probability: p.probability / 100,
+            cost: p.cost || 1.0,
+          }))
+          setDbPrizes(formattedPrizes)
+        }
+      } catch (error) {
+        console.error("Failed to fetch prizes:", error)
+      }
+    }
+    fetchPrizes()
+  }, [])
+
   const playDrawSound = useCallback(() => {
     if (!soundEnabled || !audioContextRef.current) return
 
     try {
       const ctx = audioContextRef.current
 
-      // 创建一个更好听的抽卡音效 - 类似星星闪烁的声音
       const createSparkleSound = (frequency: number, startTime: number, duration: number, volume: number) => {
         const oscillator = ctx.createOscillator()
         const gainNode = ctx.createGain()
@@ -128,7 +156,6 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
         filter.connect(gainNode)
         gainNode.connect(ctx.destination)
 
-        // 设置滤波器让声音更清脆
         filter.type = "highpass"
         filter.frequency.setValueAtTime(200, startTime)
 
@@ -146,7 +173,6 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
       }
 
       const now = ctx.currentTime
-      // 创建多层次的星星音效
       createSparkleSound(800, now, 0.3, soundVolume * 0.3)
       createSparkleSound(1200, now + 0.1, 0.25, soundVolume * 0.25)
       createSparkleSound(1600, now + 0.15, 0.2, soundVolume * 0.2)
@@ -163,7 +189,6 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     try {
       const ctx = audioContextRef.current
 
-      // 创建更华丽的获奖音效
       const playMagicalTone = (frequency: number, startTime: number, duration: number, volume: number) => {
         const oscillator = ctx.createOscillator()
         const gainNode = ctx.createGain()
@@ -188,7 +213,6 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
         oscillator.stop(startTime + duration)
       }
 
-      // 播放魔法般的获奖音效序列
       const now = ctx.currentTime
       playMagicalTone(523, now, 0.4, soundVolume * 0.3) // C5
       playMagicalTone(659, now + 0.1, 0.4, soundVolume * 0.25) // E5
@@ -202,46 +226,18 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     }
   }, [soundEnabled, soundVolume])
 
-  // 硬编码奖品数据 (25张卡牌)
-  const defaultPrizes: Prize[] = [
-    { id: "1", name: "小礼物（RM1–10）", probability: 0.003 },
-    { id: "2", name: "小礼包（RM10–20）", probability: 0.002 },
-    { id: "3", name: "大礼物（RM20–30）", probability: 0.0002 },
-    { id: "4", name: "大礼包（RM30–40）", probability: 0.0003 },
-    { id: "5", name: "香氛系列沐浴露", probability: 0.0002 },
-    { id: "6", name: "JAYTIN V1 会员（1天）", probability: 0.04 },
-    { id: "7", name: "JAYTIN V2 会员（1天）", probability: 0.007 },
-    { id: "8", name: "JAYTIN V1 会员（30天）", probability: 0.002 },
-    { id: "9", name: "JAYTIN V2 会员（30天）", probability: 0.002 },
-    { id: "10", name: "下单享 1% 现金返还", probability: 0.2 },
-    { id: "11", name: "RM0.01 现金返还", probability: 0.2 },
-    { id: "12", name: "RM1 现金返还", probability: 0.05 },
-    { id: "13", name: "免邮券（满 RM50 可用）", probability: 0.0507 },
-    { id: "14", name: "JAYTIN 产品优惠券 RM50（满 RM100 可用）", probability: 0.007 },
-    { id: "15", name: "JAYTIN 产品优惠券 RM100（满 RM200 可用）", probability: 0.007 },
-    { id: "16", name: "JAYTIN 产品优惠券 RM200（满 RM300 可用）", probability: 0.007 },
-    { id: "17", name: "JAYTIN 产品优惠券 RM300（满 RM400 可用）", probability: 0.007 },
-    { id: "18", name: "免单（RM10–RM15）", probability: 0.0002 },
-    { id: "19", name: "无门槛优惠券 RM5", probability: 0.002 },
-    { id: "20", name: "圣诞节特别活动群（限量）", probability: 0.007 },
-    { id: "21", name: "重新抽奖机会", probability: 0.005 },
-    { id: "22", name: "荣耀奖品已封仓", probability: 0.4 },
-    { id: "23", name: "免费衣服（好质量）", probability: 0.0002 },
-    { id: "24", name: "免费裤子（好质量）", probability: 0.0002 },
-    { id: "25", name: "免费电竞椅（RM1k）", probability: 0 },
-  ]
-
   const selectPrize = useCallback((): Prize => {
+    const prizesToUse = dbPrizes.length > 0 ? dbPrizes : defaultPrizes
     const randomValue = Math.random()
     let cumulativeProbability = 0
-    for (const prize of defaultPrizes) {
+    for (const prize of prizesToUse) {
       cumulativeProbability += prize.probability
       if (randomValue < cumulativeProbability) {
         return prize
       }
     }
-    return defaultPrizes[defaultPrizes.length - 1]
-  }, [])
+    return prizesToUse[prizesToUse.length - 1]
+  }, [dbPrizes])
 
   const generatePrizes = useCallback(() => {
     const newPrizes = Array(6)
@@ -301,6 +297,17 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
   const handleCardClick = async (index: number) => {
     if (!canDraw || isDrawing || selectedCard !== null) return
 
+    const cost = prizes[0]?.cost || 1
+    setPendingCardIndex(index)
+    setConfirmCost(cost)
+    setConfirmAction("card")
+    setShowConfirmModal(true)
+  }
+
+  const executeCardClick = async () => {
+    if (pendingCardIndex === null) return
+    const index = pendingCardIndex
+
     setIsDrawing(true)
     playDrawSound()
     setSelectedCard(index)
@@ -311,15 +318,12 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
 
     let selectedPrize: Prize
 
-    // 点击卡牌也使用相同的逻辑
     if (singleDrawCount < 3) {
-      // 前3次固定给"荣耀奖品已封仓"
       selectedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
       setSingleDrawCount(singleDrawCount + 1)
     } else {
-      // 第4次按正常概率抽取
       selectedPrize = selectPrize()
-      setSingleDrawCount(0) // 重置计数器
+      setSingleDrawCount(0)
     }
 
     setRevealedPrize(selectedPrize.name)
@@ -356,36 +360,39 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
 
     await resetCards()
     setIsDrawing(false)
+    setPendingCardIndex(null)
   }
 
   const handleSingleDraw = async () => {
     if (isDrawing) return
 
+    const cost = prizes[0]?.cost || 1
+    setConfirmCost(cost)
+    setConfirmAction("single")
+    setShowConfirmModal(true)
+  }
+
+  const executeSingleDraw = async () => {
     setIsDrawing(true)
     playDrawSound()
 
-    // 随机选择一张卡牌来显示动画
     const randomIndex = Math.floor(Math.random() * prizes.length)
     setSelectedCard(randomIndex)
 
     let selectedPrize: Prize
 
-    // 1连抽逻辑：前3次给"荣耀奖品已封仓"，第4次按正常概率，然后重置计数
     if (singleDrawCount < 3) {
-      // 前3次固定给"荣耀奖品已封仓"
       selectedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
       setSingleDrawCount(singleDrawCount + 1)
     } else {
-      // 第4次按正常概率抽取
       selectedPrize = selectPrize()
-      setSingleDrawCount(0) // 重置计数器
+      setSingleDrawCount(0)
     }
 
     if (!skipAnimation) {
       await new Promise((resolve) => setTimeout(resolve, 2200))
     }
 
-    // 显示抽中的奖品
     setRevealedPrize(selectedPrize.name)
     onPrizeWon(selectedPrize, "single")
     playWinSound()
@@ -424,18 +431,30 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
 
   const handleMultiDraw = async () => {
     if (isDrawing) return
+
+    const totalCost = 5.0
+    setConfirmCost(totalCost)
+    setConfirmAction("multi")
+    setShowConfirmModal(true)
+  }
+
+  const executeMultiDraw = async () => {
+    const totalCost = 5.0
+
+    if (userBalance < totalCost) {
+      alert(`您的余额不足，需要 ¥${totalCost} 才能进行5连抽（当前余额：¥${userBalance.toFixed(2)}）`)
+      return
+    }
+
     setIsDrawing(true)
     const drawnPrizes: string[] = []
 
-    // 5连抽：2个必定是"荣耀奖品已封仓"，其余3个按概率抽取
-    // 先生成5个奖品，然后随机替换其中2个为"荣耀奖品已封仓"
     const normalPrizes = Array(5)
       .fill(null)
       .map(() => selectPrize())
 
-    // 随机选择2个位置放置"荣耀奖品已封仓"
-    const fixedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[21]
-    const fixedPositions = []
+    const fixedPrize = defaultPrizes.find((p) => p.name === "荣耀奖品已封仓") || defaultPrizes[0]
+    const fixedPositions: number[] = []
     while (fixedPositions.length < 2) {
       const randomPos = Math.floor(Math.random() * 5)
       if (!fixedPositions.includes(randomPos)) {
@@ -443,7 +462,6 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
       }
     }
 
-    // 替换指定位置的奖品
     fixedPositions.forEach((pos) => {
       normalPrizes[pos] = fixedPrize
     })
@@ -477,8 +495,31 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     }
 
     setIsDrawing(false)
-    onMultiDraw(drawnPrizes)
+    onMultiDraw(drawnPrizes, totalCost)
     playWinSound()
+
+    confetti({
+      particleCount: 200,
+      spread: 100,
+      origin: { y: 0.6 },
+    })
+  }
+
+  const handleConfirm = () => {
+    setShowConfirmModal(false)
+    if (confirmAction === "single") {
+      executeSingleDraw()
+    } else if (confirmAction === "multi") {
+      executeMultiDraw()
+    } else if (confirmAction === "card") {
+      executeCardClick()
+    }
+  }
+
+  const handleCancel = () => {
+    setShowConfirmModal(false)
+    setConfirmAction(null)
+    setPendingCardIndex(null)
   }
 
   const resetCards = useCallback(() => {
@@ -503,268 +544,301 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw }: LuckyCa
     visible: { opacity: 1, scale: 1 },
   }
 
+  const defaultPrizes: Prize[] = [{ id: "22", name: "荣耀奖品已封仓", probability: 0.4, cost: 1.0 }]
+
   return (
-    <Card
-      className="w-full max-w-4xl mx-auto bg-gradient-to-br from-white/40 via-[#E6F3FF]/30 to-white/40 backdrop-blur-xl border-2 border-[#999999]/20 rounded-2xl shadow-2xl shadow-[#999999]/10 relative overflow-hidden"
-      style={{ animation: "float 6s ease-in-out infinite" }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/10 to-transparent"></div>
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#999999]/30 to-transparent"></div>
-      <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#999999]/30 to-transparent"></div>
+    <div className="relative">
+      <Card
+        className="w-full max-w-4xl mx-auto bg-gradient-to-br from-white/40 via-[#E6F3FF]/30 to-white/40 backdrop-blur-xl border-2 border-[#999999]/20 rounded-2xl shadow-2xl shadow-[#999999]/10 relative overflow-hidden"
+        style={{ animation: "float 6s ease-in-out infinite" }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/10 to-transparent"></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#999999]/30 to-transparent"></div>
+        <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#999999]/30 to-transparent"></div>
 
-      <CardContent className="p-8 relative z-10">
-        <div className="relative w-full h-full" style={{ transformStyle: "preserve-3d" }}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 md:gap-6 mb-6">
-            <AnimatePresence>
-              {prizes.map((prize, index) => (
-                <motion.div
-                  key={index}
-                  initial="hidden"
-                  animate={
-                    selectedCard === index ? "visible" : isDrawing && selectedCard !== null ? "dimmed" : "normal"
-                  }
-                  variants={cardVariants}
-                  whileHover={
-                    canDraw && selectedCard === null
-                      ? {
-                          scale: 1.08,
-                          rotateY: 8,
-                          boxShadow: "0 25px 35px -8px rgba(0, 0, 0, 0.15), 0 15px 15px -8px rgba(0, 0, 0, 0.08)",
-                          y: -8,
-                        }
-                      : {}
-                  }
-                  whileTap={canDraw && selectedCard === null ? { scale: 0.92 } : {}}
-                  className={`aspect-[3/4] bg-gradient-to-br from-[#f8fbff] via-[#E6F3FF] to-[#e0f0ff] rounded-xl border-2 border-[#999999]/30 shadow-xl shadow-[#999999]/10 flex items-center justify-center text-[#999999] text-xl font-bold overflow-hidden relative transition-all duration-300 ${
-                    canDraw && selectedCard === null
-                      ? "hover:border-[#999999] hover:shadow-2xl hover:shadow-[#999999]/20 hover:scale-[1.02] cursor-pointer"
-                      : "opacity-60 cursor-not-allowed"
-                  }`}
-                  onClick={() => handleCardClick(index)}
-                  style={{
-                    perspective: "1000px",
-                    transformStyle: "preserve-3d",
-                  }}
-                >
-                  {canDraw && selectedCard === null && (
-                    <motion.div
-                      className="absolute inset-0 rounded-xl border-2 border-transparent"
-                      whileHover={{ borderColor: "#999999", transition: { duration: 0.2 } }}
-                    />
-                  )}
-
-                  {canDraw && selectedCard === null && (
-                    <>
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                        animate={{
-                          x: ["-100%", "100%"],
-                        }}
-                        transition={{
-                          duration: 2.5,
-                          repeat: Number.POSITIVE_INFINITY,
-                          repeatDelay: 4,
-                        }}
-                      />
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-45 from-transparent via-[#E6F3FF]/20 to-transparent"
-                        animate={{
-                          rotate: [0, 360],
-                        }}
-                        transition={{
-                          duration: 8,
-                          repeat: Number.POSITIVE_INFINITY,
-                          ease: "linear",
-                        }}
-                      />
-                    </>
-                  )}
-
-                  <div
-                    className="relative w-full h-full"
+        <CardContent className="p-8 relative z-10">
+          <div className="relative w-full h-full" style={{ transformStyle: "preserve-3d" }}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 md:gap-6 mb-6">
+              <AnimatePresence>
+                {prizes.map((prize, index) => (
+                  <motion.div
+                    key={index}
+                    initial="hidden"
+                    animate={
+                      selectedCard === index ? "visible" : isDrawing && selectedCard !== null ? "dimmed" : "normal"
+                    }
+                    variants={cardVariants}
+                    whileHover={
+                      canDraw && selectedCard === null
+                        ? {
+                            scale: 1.08,
+                            rotateY: 8,
+                            boxShadow: "0 25px 35px -8px rgba(0, 0, 0, 0.15), 0 15px 15px -8px rgba(0, 0, 0, 0.08)",
+                            y: -8,
+                          }
+                        : {}
+                    }
+                    whileTap={canDraw && selectedCard === null ? { scale: 0.92 } : {}}
+                    className={`aspect-[3/4] bg-gradient-to-br from-[#f8fbff] via-[#E6F3FF] to-[#e0f0ff] rounded-xl border-2 border-[#999999]/30 shadow-xl shadow-[#999999]/10 flex items-center justify-center text-[#999999] text-xl font-bold overflow-hidden relative transition-all duration-300 ${
+                      canDraw && selectedCard === null
+                        ? "hover:border-[#999999] hover:shadow-2xl hover:shadow-[#999999]/20 hover:scale-[1.02] cursor-pointer"
+                        : "opacity-60 cursor-not-allowed"
+                    }`}
+                    onClick={() => handleCardClick(index)}
                     style={{
+                      perspective: "1000px",
                       transformStyle: "preserve-3d",
-                      transform: selectedCard === index ? "rotateY(180deg)" : "rotateY(0deg)",
                     }}
                   >
+                    {canDraw && selectedCard === null && (
+                      <motion.div
+                        className="absolute inset-0 rounded-xl border-2 border-transparent"
+                        whileHover={{ borderColor: "#999999", transition: { duration: 0.2 } }}
+                      />
+                    )}
+
+                    {canDraw && selectedCard === null && (
+                      <>
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                          animate={{
+                            x: ["-100%", "100%"],
+                          }}
+                          transition={{
+                            duration: 2.5,
+                            repeat: Number.POSITIVE_INFINITY,
+                            repeatDelay: 4,
+                          }}
+                        />
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-45 from-transparent via-[#E6F3FF]/20 to-transparent"
+                          animate={{
+                            rotate: [0, 360],
+                          }}
+                          transition={{
+                            duration: 8,
+                            repeat: Number.POSITIVE_INFINITY,
+                            ease: "linear",
+                          }}
+                        />
+                      </>
+                    )}
+
                     <div
-                      className="absolute w-full h-full flex flex-col items-center justify-center backface-hidden bg-gradient-to-br from-[#E6F3FF] via-white to-[#f0f8ff] border-2 border-[#999999]/20 rounded-lg"
+                      className="relative w-full h-full"
                       style={{
-                        backfaceVisibility: "hidden",
-                        boxShadow: "inset 0 2px 4px rgba(255,255,255,0.8), inset 0 -2px 4px rgba(0,0,0,0.1)",
+                        transformStyle: "preserve-3d",
+                        transform: selectedCard === index ? "rotateY(180deg)" : "rotateY(0deg)",
                       }}
                     >
-                      <div className="absolute top-2 left-2 right-2 h-1 bg-gradient-to-r from-transparent via-[#999999]/30 to-transparent rounded-full"></div>
-
-                      <motion.div
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 150 }}
-                        className="relative mb-3"
+                      <div
+                        className="absolute w-full h-full flex flex-col items-center justify-center backface-hidden bg-gradient-to-br from-[#E6F3FF] via-white to-[#f0f8ff] border-2 border-[#999999]/20 rounded-lg"
+                        style={{
+                          backfaceVisibility: "hidden",
+                          boxShadow: "inset 0 2px 4px rgba(255,255,255,0.8), inset 0 -2px 4px rgba(0,0,0,0.1)",
+                        }}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-r from-[#999999]/20 to-[#E6F3FF]/20 rounded-full blur-lg"></div>
-                        <Image
-                          src="/images/jaytin-logo.png"
-                          alt="JayTIN Logo"
-                          width={80}
-                          height={30}
-                          className="relative z-10 drop-shadow-sm animate-pulse-subtle"
-                        />
-                      </motion.div>
+                        <div className="absolute top-2 left-2 right-2 h-1 bg-gradient-to-r from-transparent via-[#999999]/30 to-transparent rounded-full"></div>
 
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Sparkles className="w-4 h-4 text-[#999999] animate-pulse" />
-                        <div className="w-8 h-0.5 bg-gradient-to-r from-[#999999] to-[#E6F3FF] rounded-full"></div>
-                        <Sparkles className="w-4 h-4 text-[#999999] animate-pulse" style={{ animationDelay: "0.5s" }} />
+                        <motion.div
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 150 }}
+                          className="relative mb-3"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-[#999999]/20 to-[#E6F3FF]/20 rounded-full blur-lg"></div>
+                          <Image
+                            src="/images/jaytin-logo.png"
+                            alt="JayTIN Logo"
+                            width={80}
+                            height={30}
+                            className="relative z-10 drop-shadow-sm animate-pulse-subtle"
+                          />
+                        </motion.div>
+
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Sparkles className="w-4 h-4 text-[#999999] animate-pulse" />
+                          <div className="w-8 h-0.5 bg-gradient-to-r from-[#999999] to-[#E6F3FF] rounded-full"></div>
+                          <Sparkles
+                            className="w-4 h-4 text-[#999999] animate-pulse"
+                            style={{ animationDelay: "0.5s" }}
+                          />
+                        </div>
+
+                        <div className="absolute bottom-2 left-2 right-2 h-1 bg-gradient-to-r from-transparent via-[#999999]/30 to-transparent rounded-full"></div>
+
+                        <div className="absolute top-1 left-1 w-3 h-3 border-l-2 border-t-2 border-[#999999]/30 rounded-tl-lg"></div>
+                        <div className="absolute top-1 right-1 w-3 h-3 border-r-2 border-t-2 border-[#999999]/30 rounded-tr-lg"></div>
+                        <div className="absolute bottom-1 left-1 w-3 h-3 border-l-2 border-b-2 border-[#999999]/30 rounded-bl-lg"></div>
+                        <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 border-[#999999]/30 rounded-br-lg"></div>
                       </div>
 
-                      <div className="absolute bottom-2 left-2 right-2 h-1 bg-gradient-to-r from-transparent via-[#999999]/30 to-transparent rounded-full"></div>
+                      <div
+                        className="absolute w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#f8fbff] via-[#E6F3FF] to-[#e0f0ff] text-[#999999] p-3 text-center border-2 border-[#999999]/20 rounded-lg"
+                        style={{
+                          backfaceVisibility: "hidden",
+                          transform: "rotateY(180deg)",
+                          boxShadow: "inset 0 2px 4px rgba(255,255,255,0.8), inset 0 -2px 4px rgba(0,0,0,0.1)",
+                        }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/20 to-transparent rounded-lg"></div>
 
-                      <div className="absolute top-1 left-1 w-3 h-3 border-l-2 border-t-2 border-[#999999]/30 rounded-tl-lg"></div>
-                      <div className="absolute top-1 right-1 w-3 h-3 border-r-2 border-t-2 border-[#999999]/30 rounded-tr-lg"></div>
-                      <div className="absolute bottom-1 left-1 w-3 h-3 border-l-2 border-b-2 border-[#999999]/30 rounded-bl-lg"></div>
-                      <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 border-[#999999]/30 rounded-br-lg"></div>
-                    </div>
-
-                    <div
-                      className="absolute w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#f8fbff] via-[#E6F3FF] to-[#e0f0ff] text-[#999999] p-3 text-center border-2 border-[#999999]/20 rounded-lg"
-                      style={{
-                        backfaceVisibility: "hidden",
-                        transform: "rotateY(180deg)",
-                        boxShadow: "inset 0 2px 4px rgba(255,255,255,0.8), inset 0 -2px 4px rgba(0,0,0,0.1)",
-                      }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/20 to-transparent rounded-lg"></div>
-
-                      <AnimatePresence>
-                        {selectedCard === index && revealedPrize !== null ? (
-                          <motion.div
-                            key="prize-content"
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 150 }}
-                            className="relative z-10 flex flex-col items-center"
-                          >
-                            <div
-                              className="bg-white/50 backdrop-blur-sm rounded-lg p-2 border border-white/30"
-                              style={{ transform: "scaleX(-1)" }}
+                        <AnimatePresence>
+                          {selectedCard === index && revealedPrize !== null ? (
+                            <motion.div
+                              key="prize-content"
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 150 }}
+                              className="relative z-10 flex flex-col items-center"
                             >
-                              <span className="text-sm font-bold text-[#999999] max-w-full break-words chinese-text leading-tight drop-shadow-sm">
-                                {revealedPrize}
-                              </span>
-                            </div>
-                          </motion.div>
-                        ) : (
-                          <motion.div
-                            key="logo-back"
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 150 }}
-                            className="relative z-10 flex flex-col items-center"
-                          >
-                            <Image
-                              src="/images/jaytin-logo.png"
-                              alt="JayTIN Logo"
-                              width={100}
-                              height={40}
-                              className="relative z-10 drop-shadow-sm animate-pulse-subtle"
-                            />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      <Star
-                        className="absolute top-2 right-2 w-3 h-3 text-[#999999]/40 animate-spin"
-                        style={{ animationDuration: "4s" }}
-                      />
-                      <Star
-                        className="absolute bottom-2 left-2 w-3 h-3 text-[#999999]/40 animate-spin"
-                        style={{ animationDuration: "6s", animationDirection: "reverse" }}
-                      />
+                              <div
+                                className="bg-white/50 backdrop-blur-sm rounded-lg p-2 border border-white/30"
+                                style={{ transform: "scaleX(-1)" }}
+                              >
+                                <span className="text-sm font-bold text-[#999999] max-w-full break-words chinese-text leading-tight drop-shadow-sm">
+                                  {revealedPrize}
+                                </span>
+                              </div>
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              key="logo-back"
+                              initial={{ scale: 0.8, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 150 }}
+                              className="relative z-10 flex flex-col items-center"
+                            >
+                              <Image
+                                src="/images/jaytin-logo.png"
+                                alt="JayTIN Logo"
+                                width={100}
+                                height={40}
+                                className="relative z-10 drop-shadow-sm animate-pulse-subtle"
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
-                  </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+            <div className="mt-6 flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
+              <div className="flex space-x-4">
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    onClick={handleSingleDraw}
+                    disabled={!canDraw || isDrawing || userBalance < 1}
+                    className="w-full sm:w-auto px-8 py-6 text-lg font-bold bg-gradient-to-r from-[#999999] to-[#E6F3FF] hover:from-[#888888] hover:to-[#d6e9ff] text-white shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl font-jua disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    1连抽 (¥1.00)
+                  </Button>
                 </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-          <div className="mt-6 flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <div className="flex space-x-4">
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                  onClick={handleSingleDraw}
-                  className="bg-gradient-to-r from-[#999999] to-[#777777] text-white hover:from-[#888888] hover:to-[#666666] transition-all duration-300 chinese-text w-32 h-12 relative overflow-hidden shadow-lg border-2 border-white/20 rounded-xl"
-                  disabled={isDrawing || !canDraw}
-                >
-                  {!isDrawing && canDraw && (
-                    <>
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                        animate={{
-                          x: ["-100%", "100%"],
-                        }}
-                        transition={{
-                          duration: 2,
-                          repeat: Number.POSITIVE_INFINITY,
-                          repeatDelay: 3,
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20 rounded-xl"></div>
-                    </>
-                  )}
-                  <div className="relative z-10 flex items-center">
-                    <Zap className="w-5 h-5 mr-2 drop-shadow-sm" />
-                    <span className="font-bold">1连抽</span>
-                  </div>
-                </Button>
-              </motion.div>
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                  onClick={handleMultiDraw}
-                  className="bg-gradient-to-r from-[#999999] to-[#777777] text-white hover:from-[#888888] hover:to-[#666666] transition-all duration-300 chinese-text w-32 h-12 relative overflow-hidden shadow-lg border-2 border-white/20 rounded-xl"
-                  disabled={isDrawing || !canDraw}
-                >
-                  {!isDrawing && canDraw && (
-                    <>
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                        animate={{
-                          x: ["-100%", "100%"],
-                        }}
-                        transition={{
-                          duration: 2,
-                          repeat: Number.POSITIVE_INFINITY,
-                          repeatDelay: 3,
-                          delay: 0.7,
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 to-pink-400/20 rounded-xl"></div>
-                    </>
-                  )}
-                  <div className="relative z-10 flex items-center">
-                    <Star className="w-5 h-5 mr-2 drop-shadow-sm" />
-                    <span className="font-bold">5连抽</span>
-                  </div>
-                </Button>
-              </motion.div>
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    onClick={handleMultiDraw}
+                    disabled={!canDraw || isDrawing || userBalance < 5}
+                    className="w-full sm:w-auto px-8 py-6 text-lg font-bold bg-gradient-to-r from-[#999999] via-[#E6F3FF] to-[#999999] hover:from-[#888888] hover:via-[#d6e9ff] hover:to-[#888888] text-white shadow-lg hover:shadow-xl transition-all duration-300 rounded-xl font-jua disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    5连抽 (¥5.00)
+                  </Button>
+                </motion.div>
+              </div>
+              <div className="flex items-center space-x-2 mt-4 sm:mt-0">
+                <span className="text-[#999999] chinese-text text-sm">跳过动画</span>
+                <Switch checked={skipAnimation} onCheckedChange={setSkipAnimation} className="scale-75" />
+              </div>
             </div>
-            <div className="flex items-center space-x-2 mt-4 sm:mt-0">
-              <span className="text-[#999999] chinese-text text-sm">跳过动画</span>
-              <Switch checked={skipAnimation} onCheckedChange={setSkipAnimation} className="scale-75" />
-            </div>
+            {isRefreshing && (
+              <motion.div
+                initial="hidden"
+                animate="visible"
+                variants={refreshVariants}
+                transition={{ duration: 0.5 }}
+                className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-xl"
+              >
+                <div className="text-4xl text-[#999999] font-bold animate-pulse chinese-text">刷新中...</div>
+              </motion.div>
+            )}
           </div>
-          {isRefreshing && (
+        </CardContent>
+      </Card>
+
+      <AnimatePresence>
+        {showConfirmModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={handleCancel}
+          >
             <motion.div
-              initial="hidden"
-              animate="visible"
-              variants={refreshVariants}
-              transition={{ duration: 0.5 }}
-              className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-xl"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl"
             >
-              <div className="text-4xl text-[#999999] font-bold animate-pulse chinese-text">刷新中...</div>
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Sparkles className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold font-jua text-gray-900 mb-2">确认抽奖</h3>
+                <p className="text-gray-600 font-yuanqi">
+                  {confirmAction === "multi" ? "确认进行5连抽吗？" : "确认进行抽奖吗？"}
+                </p>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600 font-yuanqi">当前余额</span>
+                  <span className="text-lg font-bold font-jua text-gray-900">¥{userBalance.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600 font-yuanqi">抽奖费用</span>
+                  <span className="text-lg font-bold font-jua text-red-600">-¥{confirmCost.toFixed(2)}</span>
+                </div>
+                <div className="border-t border-gray-200 pt-2 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-900 font-yuanqi font-medium">剩余余额</span>
+                    <span className="text-xl font-bold font-jua text-green-600">
+                      ¥{(userBalance - confirmCost).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {userBalance < confirmCost && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <p className="text-red-600 text-sm font-yuanqi text-center">余额不足，请联系管理员充值</p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleCancel}
+                  variant="outline"
+                  className="flex-1 font-yuanqi py-6 text-lg bg-transparent"
+                >
+                  取消
+                </Button>
+                <Button
+                  onClick={handleConfirm}
+                  disabled={userBalance < confirmCost}
+                  className="flex-1 font-yuanqi py-6 text-lg bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                >
+                  确认抽奖
+                </Button>
+              </div>
             </motion.div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }

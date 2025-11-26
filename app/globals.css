@@ -18,6 +18,11 @@ body {
     Helvetica, Arial, sans-serif;
 }
 
+/* Added Jua font class */
+.font-jua {
+  font-family: var(--font-jua), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", sans-serif;
+}
+
 .decorations > * {
   pointer-events: none;
 }

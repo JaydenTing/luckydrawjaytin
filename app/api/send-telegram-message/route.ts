@@ -6,7 +6,7 @@ const WINNER_GROUP_ID = "-1002456373939"
 
 export async function POST(request: Request) {
   try {
-    const { phone, prize, date, deviceInfo, screenshot, drawType, prizes } = await request.json()
+    const { username, phone, prize, date, deviceInfo, screenshot, drawType, prizes } = await request.json()
 
     // 完整的设备信息（只用于历史记录群组）
     const fullDeviceInfo = `
@@ -69,7 +69,8 @@ export async function POST(request: Request) {
 
       // 历史群组：完整信息
       historyMessage = `🎊 JayTIN 5连抽记录
-📞 用户: ${phone}
+👤 用户: ${username}
+📞 电话: ${phone}
 🕐 时间: ${date}
 🌐 网站: https://jaytin.online/
 
@@ -81,6 +82,7 @@ ${fullDeviceInfo}`
       // 中奖群组：只有中奖信息，不包含设备信息
       winnerMessage = `🎊 JayTIN 5连抽中奖！
 
+👤 ${username}
 📞 ${phone}
 🕐 ${date}
 🌐 https://jaytin.online/
@@ -91,7 +93,8 @@ ${prizesList}`
       // 单次抽奖消息
       // 历史群组：完整信息
       historyMessage = `🎉 JayTIN 1连抽记录
-📞 用户: ${phone}
+👤 用户: ${username}
+📞 电话: ${phone}
 🕐 时间: ${date}
 🌐 网站: https://jaytin.online/
 🎁 奖品: ${prize}
@@ -101,6 +104,7 @@ ${fullDeviceInfo}`
       // 中奖群组：只有中奖信息，不包含设备信息
       winnerMessage = `🎉 JayTIN 1连抽中奖！
 
+👤 ${username}
 📞 ${phone}
 🕐 ${date}
 🌐 https://jaytin.online/

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import InfoModal from "./components/InfoModal"
+import { useRouter } from "next/navigation"
 import LuckyCards from "./components/LuckyCards"
 import PrizeModal from "./components/PrizeModal"
 import SnowAnimation from "./components/SnowAnimation"
@@ -12,18 +12,29 @@ import PrizeSummaryModal from "./components/PrizeSummaryModal"
 import { getDeviceInfo } from "./utils/deviceInfo"
 import FontLoader from "./components/FontLoader"
 import Image from "next/image"
+import { Button } from "@/components/ui/button"
+import { History, Gift, Wallet } from "lucide-react"
 
 interface Prize {
   name: string
   probability: number
   image_url?: string
+  cost?: number
+}
+
+interface UserInfo {
+  username: string
+  phone?: string
+  userId: number
+  balance: number
+  is_banned: boolean
 }
 
 export default function Home() {
-  const [showInfoModal, setShowInfoModal] = useState(true)
+  const router = useRouter()
   const [showPrizeModal, setShowPrizeModal] = useState(false)
   const [showPrizeSummaryModal, setShowPrizeSummaryModal] = useState(false)
-  const [userInfo, setUserInfo] = useState<{ phone: string } | null>(null)
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
   const [prize, setPrize] = useState<Prize | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -31,58 +42,95 @@ export default function Home() {
   const [deviceInfo, setDeviceInfo] = useState<any>(null)
   const [currentDrawType, setCurrentDrawType] = useState<"single" | "multi">("single")
   const backgroundMusicRef = useRef<HTMLAudioElement | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
+  const [myHistory, setMyHistory] = useState<any[]>([])
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false)
 
   useEffect(() => {
+    // Check if user is logged in
+    const userInfoStr = localStorage.getItem("userInfo")
+    if (!userInfoStr) {
+      router.push("/login")
+      return
+    }
+
+    const user = JSON.parse(userInfoStr)
+
+    // Check if user is banned
+    if (user.is_banned) {
+      alert("您的账号已被封禁，请联系管理员")
+      localStorage.removeItem("userInfo")
+      router.push("/login")
+      return
+    }
+
+    setUserInfo(user)
     setIsLoading(false)
     getDeviceInfo().then(setDeviceInfo)
-
-    const initBackgroundMusic = () => {
-      // 背景音乐将通过 LuckyCards 组件处理
-    }
-
-    initBackgroundMusic()
-
-    return () => {
-      if (backgroundMusicRef.current) {
-        backgroundMusicRef.current.pause()
-        backgroundMusicRef.current.remove()
-      }
-    }
-  }, [])
-
-  const handleInfoSubmit = async (info: { phone: string }) => {
-    setUserInfo(info)
-    setShowInfoModal(false)
-
-    try {
-      const audio = new Audio()
-      audio.volume = 0
-      audio.src = "/sounds/draw-sound.mp3"
-      await audio.play()
-      audio.pause()
-      audio.remove()
-
-      if (backgroundMusicRef.current && backgroundMusicRef.current.paused) {
-        backgroundMusicRef.current
-          .play()
-          .catch((e) => console.warn("Background music play after interaction failed:", e))
-      }
-    } catch (e) {
-      console.warn("Failed to play muted audio to unlock context:", e)
-    }
-  }
+  }, [router])
 
   const handlePrizeWon = async (wonPrize: Prize, drawType: "single" | "multi" = "single") => {
     if (!userInfo || !deviceInfo) return
 
+    const cost = wonPrize.cost || 1
+    if (userInfo.balance < cost) {
+      alert(`您的余额不足，需要 ${cost} 元才能抽奖（当前余额：${userInfo.balance} 元）`)
+      return
+    }
+
     setPrize(wonPrize)
     setCurrentDrawType(drawType)
     setShowPrizeModal(true)
+
+    try {
+      await fetch("/api/user/draw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: userInfo.userId,
+          prizeName: wonPrize.name,
+          drawType,
+          cost,
+        }),
+      })
+
+      const updatedUser = { ...userInfo, balance: userInfo.balance - cost }
+      setUserInfo(updatedUser)
+      localStorage.setItem("userInfo", JSON.stringify(updatedUser))
+    } catch (error) {
+      console.error("Failed to record draw:", error)
+    }
   }
 
-  const handleMultiDraw = async (prizes: string[]) => {
+  const handleMultiDraw = async (prizes: string[], totalCost: number) => {
+    if (!userInfo) return
+
+    if (userInfo.balance < totalCost) {
+      alert(`您的余额不足，需要 ${totalCost} 元才能进行5连抽（当前余额：${userInfo.balance} 元）`)
+      return
+    }
+
     setMultiDrawPrizes(prizes)
     setShowPrizeSummaryModal(true)
+
+    try {
+      await fetch("/api/user/draw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: userInfo.userId,
+          prizes,
+          drawType: "multi",
+          cost: totalCost,
+        }),
+      })
+
+      const updatedUser = { ...userInfo, balance: userInfo.balance - totalCost }
+      setUserInfo(updatedUser)
+      localStorage.setItem("userInfo", JSON.stringify(updatedUser))
+    } catch (error) {
+      console.error("Failed to record multi-draw:", error)
+    }
   }
 
   const handleConfirm = async (screenshot?: string) => {
@@ -93,15 +141,14 @@ export default function Home() {
     const date = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })
 
     try {
-      console.log("Sending telegram message with screenshot:", !!screenshot)
-
       const response = await fetch("/api/send-telegram-message", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          phone: userInfo.phone,
+          username: userInfo.username,
+          phone: userInfo.phone || "未提供",
           prize: prize.name,
           date,
           deviceInfo,
@@ -111,13 +158,10 @@ export default function Home() {
       })
 
       const result = await response.json()
-      console.log("Telegram API response:", result)
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to send Telegram message")
       }
-
-      console.log("Message sent successfully!")
     } catch (error) {
       console.error("Error sending Telegram message:", error)
       setError("发送消息时出错: " + (error instanceof Error ? error.message : "未知错误"))
@@ -130,15 +174,14 @@ export default function Home() {
     const date = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })
 
     try {
-      console.log("Sending multi-draw telegram message with screenshot")
-
       const response = await fetch("/api/send-telegram-message", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          phone: userInfo.phone,
+          username: userInfo.username,
+          phone: userInfo.phone || "未提供",
           prizes: multiDrawPrizes,
           date,
           deviceInfo,
@@ -148,16 +191,41 @@ export default function Home() {
       })
 
       const result = await response.json()
-      console.log("Multi-draw Telegram API response:", result)
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to send Telegram message")
       }
-
-      console.log("Multi-draw message sent successfully!")
     } catch (error) {
       console.error("Error sending multi-draw Telegram message:", error)
       setError("发送消息时出错: " + (error instanceof Error ? error.message : "未知错误"))
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem("userInfo")
+    router.push("/login")
+  }
+
+  const loadMyHistory = async () => {
+    if (!userInfo) return
+    try {
+      const response = await fetch(`/api/user/history?userId=${userInfo.userId}`)
+      const data = await response.json()
+      setMyHistory(data.history || [])
+      setShowProfile(true)
+    } catch (error) {
+      console.error("Failed to load history:", error)
+    }
+  }
+
+  const toggleMusic = () => {
+    if (backgroundMusicRef.current) {
+      if (isMusicPlaying) {
+        backgroundMusicRef.current.pause()
+      } else {
+        backgroundMusicRef.current.play()
+      }
+      setIsMusicPlaying(!isMusicPlaying)
     }
   }
 
@@ -178,10 +246,91 @@ export default function Home() {
 
   return (
     <FontLoader>
-      <main className="flex min-h-screen flex-col items-center justify-center p-4 md:p-24 bg-gradient-to-br from-white to-[#E6F3FF] overflow-hidden">
+      <main className="flex min-h-screen flex-col items-center justify-center p-4 md:p-24 bg-white overflow-hidden">
         <Background3D />
         <ParticleBackground />
         <SnowAnimation />
+
+        <button
+          onClick={toggleMusic}
+          className="fixed bottom-4 right-4 z-50 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 hover:bg-white transition-all"
+          title={isMusicPlaying ? "关闭音乐" : "播放音乐"}
+        >
+          {isMusicPlaying ? "🔊" : "🔇"}
+        </button>
+
+        <div className="absolute top-4 right-4 z-50 flex items-center gap-3">
+          <Button
+            onClick={loadMyHistory}
+            variant="outline"
+            size="sm"
+            className="font-yuanqi bg-white/90 backdrop-blur-sm shadow-lg border-gray-200"
+          >
+            <History className="w-4 h-4 mr-2" />
+            我的记录
+          </Button>
+          <div className="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg border border-gray-200">
+            <div className="text-right">
+              <p className="text-sm text-gray-900 font-yuanqi">欢迎，{userInfo?.username}</p>
+              <p className="text-xs text-gray-600 font-yuanqi flex items-center gap-1 justify-end">
+                <Wallet className="w-3 h-3" />
+                余额: ¥{Number(userInfo?.balance || 0).toFixed(2)}
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            size="sm"
+            className="font-yuanqi bg-white/90 backdrop-blur-sm shadow-lg border-gray-200"
+          >
+            登出
+          </Button>
+        </div>
+
+        {showProfile && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold font-jua text-gray-900">我的抽奖记录</h2>
+                <Button onClick={() => setShowProfile(false)} variant="ghost" size="sm">
+                  关闭
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {myHistory.length === 0 ? (
+                  <p className="text-center text-gray-500 font-yuanqi py-8">暂无抽奖记录</p>
+                ) : (
+                  myHistory.map((record, index) => (
+                    <div
+                      key={index}
+                      className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Gift className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-yuanqi text-gray-900 font-medium">{record.prize_name}</p>
+                          <p className="font-yuanqi text-xs text-gray-600">
+                            {new Date(record.created_at).toLocaleString("zh-CN")}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-yuanqi">
+                        {record.draw_type === "multi" ? "5连抽" : "单抽"}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: -50 }}
@@ -207,9 +356,14 @@ export default function Home() {
           transition={{ duration: 0.5, delay: 0.5 }}
           className="mt-8 w-full max-w-2xl"
         >
-          <LuckyCards canDraw={!!userInfo} onPrizeWon={handlePrizeWon} onMultiDraw={handleMultiDraw} />
+          <LuckyCards
+            canDraw={!!userInfo && userInfo.balance > 0}
+            onPrizeWon={handlePrizeWon}
+            onMultiDraw={handleMultiDraw}
+            userBalance={userInfo?.balance || 0}
+          />
         </motion.div>
-        <InfoModal isOpen={showInfoModal} onSubmit={handleInfoSubmit} />
+
         <PrizeModal
           isOpen={showPrizeModal}
           onClose={() => setShowPrizeModal(false)}

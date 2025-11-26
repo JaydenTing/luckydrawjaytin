@@ -18,17 +18,6 @@ export default function LuckyWheel({ canSpin, onPrizeWon }: LuckyWheelProps) {
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  const prizes: Prize[] = [
-    { name: "DJ新款无人机", probability: 0 },
-    { name: "IPHONE16 PRO", probability: 0 },
-    { name: "小礼物", probability: 0.01 },
-    { name: "1%现金回扣卷", probability: 0.05 },
-    { name: "免单", probability: 0 },
-    { name: "下单送小礼物", probability: 0.05 },
-    { name: "RM0.1TNG", probability: 0.04 },
-    { name: "继续加油", probability: 0.85 }
-  ]
-
   useEffect(() => {
     drawWheel()
     window.addEventListener('resize', drawWheel)
