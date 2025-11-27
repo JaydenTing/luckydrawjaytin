@@ -56,15 +56,22 @@ export default function Home() {
 
     const user = JSON.parse(userInfoStr)
 
+    console.log("[v0] Loaded userInfo from localStorage:", user)
+
+    const normalizedUser = {
+      ...user,
+      userId: user.userId || user.id, // Use userId if it exists, otherwise use id
+    }
+
     // Check if user is banned
-    if (user.is_banned) {
+    if (normalizedUser.is_banned) {
       alert("您的账号已被封禁，请联系管理员")
       localStorage.removeItem("userInfo")
       router.push("/login")
       return
     }
 
-    setUserInfo(user)
+    setUserInfo(normalizedUser)
     setIsLoading(false)
     getDeviceInfo().then(setDeviceInfo)
   }, [router])
@@ -114,6 +121,8 @@ export default function Home() {
     setShowPrizeSummaryModal(true)
 
     try {
+      console.log("[v0] Sending multi-draw with userId:", userInfo.userId)
+
       await fetch("/api/user/draw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

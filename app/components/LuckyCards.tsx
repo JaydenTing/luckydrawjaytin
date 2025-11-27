@@ -440,9 +440,10 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw, userBalan
 
   const executeMultiDraw = async () => {
     const totalCost = 5.0
+    const balance = Number(userBalance) || 0
 
-    if (userBalance < totalCost) {
-      alert(`您的余额不足，需要 ¥${totalCost} 才能进行5连抽（当前余额：¥${userBalance.toFixed(2)}）`)
+    if (balance < totalCost) {
+      alert(`您的余额不足，需要 ¥${totalCost} 才能进行5连抽（当前余额：¥${balance.toFixed(2)}）`)
       return
     }
 
@@ -797,7 +798,9 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw, userBalan
               <div className="bg-gray-50 rounded-xl p-4 mb-6">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-600 font-yuanqi">当前余额</span>
-                  <span className="text-lg font-bold font-jua text-gray-900">¥{userBalance.toFixed(2)}</span>
+                  <span className="text-lg font-bold font-jua text-gray-900">
+                    ¥{(Number(userBalance) || 0).toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-600 font-yuanqi">抽奖费用</span>
@@ -807,7 +810,7 @@ export default function LuckyCards({ canDraw, onPrizeWon, onMultiDraw, userBalan
                   <div className="flex justify-between items-center">
                     <span className="text-gray-900 font-yuanqi font-medium">剩余余额</span>
                     <span className="text-xl font-bold font-jua text-green-600">
-                      ¥{(userBalance - confirmCost).toFixed(2)}
+                      ¥{((Number(userBalance) || 0) - confirmCost).toFixed(2)}
                     </span>
                   </div>
                 </div>

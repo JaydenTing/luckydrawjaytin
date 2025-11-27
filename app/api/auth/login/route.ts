@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       user: {
-        id: user.id,
+        userId: user.id,
         username: user.username,
         phone: user.phone,
         is_admin: user.is_admin,

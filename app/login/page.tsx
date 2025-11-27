@@ -41,6 +41,16 @@ export default function LoginPage() {
         return
       }
 
+      console.log("[v0] Login response data:", data)
+
+      // Ensure userId exists in the user object
+      if (!data.user.userId) {
+        console.error("[v0] Missing userId in user object:", data.user)
+        setError("登录数据错误，请重试")
+        setIsLoading(false)
+        return
+      }
+
       localStorage.setItem("userInfo", JSON.stringify(data.user))
 
       if (data.user.is_admin) {
@@ -70,6 +80,16 @@ export default function LoginPage() {
 
       if (!response.ok) {
         setError(data.error || "注册失败")
+        setIsLoading(false)
+        return
+      }
+
+      console.log("[v0] Register response data:", data)
+
+      // Ensure userId exists in the user object
+      if (!data.user.userId) {
+        console.error("[v0] Missing userId in user object:", data.user)
+        setError("注册数据错误，请重试")
         setIsLoading(false)
         return
       }
